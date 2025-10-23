@@ -1,0 +1,76 @@
+pkg update -y
+pkg install python -y
+pkg install pip -y
+pip install pillow fpdf
+
+cd /storage/emulated/0/Pour\ image/
+
+python3 <<'EOF'
+import os
+from PIL import Image, ImageOps
+from fpdf import FPDF
+
+# --- CONFIGURATION ---
+zip_path = "Pwogram_3e_Ane_Nouvo_Segonde.zip"
+output_pdf = "Pwogram_3e_Ane_Nouvo_Segonde_Livre.pdf"
+cover_title = "Pwogram 3e Ane Nouvo Segonde"
+author = "Le_grand_cali"
+
+# --- EXTRACTION DES IMAGES ---
+import zipfile
+if not os.path.exists("pages"):
+    os.mkdir("pages")
+
+with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+    zip_ref.extractall("pages")
+
+# --- CRÉATION DU PDF ---
+pdf = FPDF(format='A4')
+pdf.set_auto_page_break(auto=True, margin=15)
+
+# Couverture
+pdf.add_page()
+pdf.set_font("Arial", 'B', 22)
+pdf.cell(0, 100, cover_title, align="C", ln=True)
+pdf.set_font("Arial", 'I', 14)
+pdf.cell(0, 10, f"par {author}", align="C", ln=True)
+
+# Parcourir les images extraites
+image_folder = "pages"
+images = sorted([f for f in os.listdir(image_folder) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+
+for i, img_file in enumerate(images, start=1):
+    img_path = os.path.join(image_folder, img_file)
+    try:
+        # Ouvrir et nettoyer l'image
+        img = Image.open(img_path)
+        img = ImageOps.exif_transpose(img)
+        img = img.convert("RGB")
+        
+        # Redimensionnement proportionnel
+        w, h = img.size
+        ratio = min(595.0 / w, 842.0 / h)
+        new_size = (int(w * ratio), int(h * ratio))
+        img = img.resize(new_size, Image.LANCZOS)
+        
+        # Ajouter fond blanc
+        background = Image.new("RGB", (595, 842), (255, 255, 255))
+        bg_w, bg_h = background.size
+        offset = ((bg_w - new_size[0]) // 2, (bg_h - new_size[1]) // 2)
+        background.paste(img, offset)
+        
+        # Enregistrer temporairement
+        temp_img = f"temp_page_{i}.jpg"
+        background.save(temp_img, "JPEG", quality=90)
+        
+        # Ajouter au PDF
+        pdf.add_page()
+        pdf.image(temp_img, x=0, y=0, w=210, h=297)
+        
+        os.remove(temp_img)
+    except Exception as e:
+        print(f"Erreur avec {img_file}: {e}")
+
+pdf.output(output_pdf)
+print(f"\n✅ PDF généré avec succès : {output_pdf}")
+EOF
